@@ -27,7 +27,7 @@ const DashboardLayout = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border">
-        <img src={logo} alt="punarCYCLE" className="w-28" />
+        <img src={logo} alt="punarCYCLE" className="w-40" />
       </div>
       {profile && (
         <div className="px-4 py-3 border-b border-sidebar-border">
@@ -43,10 +43,9 @@ const DashboardLayout = () => {
             end={item.to === "/dashboard"}
             onClick={() => setSidebarOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`
             }
           >
