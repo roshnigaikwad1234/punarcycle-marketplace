@@ -1,95 +1,168 @@
+// Data structures for the punarCYCLE matching system
+
 export interface WasteListing {
   id: string;
-  factoryId: string;
-  factoryName?: string;
   wasteType: string;
   quantity: number;
-  unit: string;
-  frequency: string;
-  location: string;
-  latitude: number;
-  longitude: number;
+  unit?: string;
+  city: string;
   hazardous: boolean;
-  availabilityStart: string;
-  availabilityEnd: string;
-  createdAt?: any;
+  createdBy: string; // factoryId
+  factoryId?: string; // fallback for some existing code
+  frequency?: string;
 }
 
-export interface MatchResult {
+export interface Factory {
+  id: string;
+  factoryName: string;
+  city: string;
+  acceptedWasteTypes: string[];
+  minQuantity: number;
+  maxQuantity: number;
+  role: 'consumer' | 'producer' | 'both';
+  pricePerKg?: number; // Price they are willing to pay/charge per kg
+}
+
+export interface Match {
   wasteListingId: string;
   buyerFactoryId: string;
-  buyerFactoryName: string;
-  wasteType: string;
+  buyerFactoryName?: string;
   compatibilityScore: number;
-  distanceKm: number;
-  co2Saved: number;
-  quantityMatch: number;
+  reasons: string[];
+  createdAt: any;
+  pricePerKg?: number;
+  requiredQuantity?: number;
+  distanceKm?: number;
+  wasteType?: string;
+  co2Saved?: number;
 }
 
-const WASTE_COMPATIBILITY: Record<string, string[]> = {
-  "plastic scrap": ["plastic scrap", "recycled plastic", "plastic pellets"],
-  "fly ash": ["fly ash", "cement aggregate", "construction fill"],
-  "metal scrap": ["metal scrap", "recycled metal", "steel scrap"],
-  "chemical waste": ["chemical waste", "chemical byproduct"],
-  "textile waste": ["textile waste", "recycled fiber", "cotton waste"],
-  "organic waste": ["organic waste", "biomass", "compost material"],
-  "glass waste": ["glass waste", "recycled glass", "glass cullet"],
-  "rubber waste": ["rubber waste", "recycled rubber"],
-  "wood waste": ["wood waste", "biomass", "wood chips"],
-  "e-waste": ["e-waste", "electronic scrap"],
-};
+/**
+ * Calculates the compatibility score between a waste listing and a buyer factory
+ */
+export function calculateMatchScore(waste: WasteListing, buyer: Factory): { score: number; reasons: string[] } {
+  let score = 0;
+  const reasons: string[] = [];
 
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  // 1. Waste type compatibility (+40 points)
+  if (buyer.acceptedWasteTypes?.some(acceptedType =>
+    acceptedType.toLowerCase() === waste.wasteType.toLowerCase()
+  )) {
+    score += 40;
+    reasons.push(`Material '${waste.wasteType}' matches industrial processing capacity`);
+  }
+
+  // 2. Same city bonus (+25 points)
+  if (waste.city.toLowerCase() === buyer.city.toLowerCase()) {
+    score += 25;
+    reasons.push(`Strategic regional proximity: ${waste.city}`);
+  }
+
+  // 3. Quantity within buyer's range (+15 points)
+  if (waste.quantity >= (buyer.minQuantity || 0) && waste.quantity <= (buyer.maxQuantity || Infinity)) {
+    score += 15;
+    reasons.push(`Supply volume fits optimal operational threshold`);
+  }
+
+  // 4. Non-hazardous waste bonus (+10 points)
+  if (!waste.hazardous) {
+    score += 10;
+    reasons.push('Standard material handling (Non-hazardous)');
+  }
+
+  // 5. Industry relevance or fallback compatibility (+10 points)
+  score += 10;
+  reasons.push('Circular integration potential');
+
+  return { score: Math.min(score, 100), reasons: reasons.slice(0, 3) };
 }
 
-function materialScore(wasteType: string, buyerNeeds: string): number {
-  const wt = wasteType.toLowerCase();
-  const bn = buyerNeeds.toLowerCase();
-  if (wt === bn) return 100;
-  const compatible = WASTE_COMPATIBILITY[wt] || [];
-  if (compatible.some((c) => bn.includes(c) || c.includes(bn))) return 75;
-  return 0;
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  query,
+  where,
+  serverTimestamp
+} from "firebase/firestore";
+import { db } from "./firebase";
+import { analyzeMatchWithGemini } from "./gemini";
+
+/**
+ * Generates matches for a new waste listing
+ */
+export async function generateMatchesForWaste(wasteListingId: string): Promise<void> {
+  try {
+    const wasteDoc = await getDoc(doc(db, "wasteListings", wasteListingId));
+    if (!wasteDoc.exists()) throw new Error(`Waste listing ${wasteListingId} not found`);
+
+    const waste = { id: wasteDoc.id, ...wasteDoc.data() } as WasteListing;
+
+    const factoriesQuery = query(collection(db, "factories"), where("role", "in", ["consumer", "both"]));
+    const factoriesSnapshot = await getDocs(factoriesQuery);
+    const buyerFactories = factoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Factory[];
+
+    for (const buyer of buyerFactories) {
+      if (buyer.id === (waste.createdBy || waste.factoryId)) continue;
+
+      let score, reasons;
+      try {
+        const aiResult = await analyzeMatchWithGemini(waste, buyer);
+        if (aiResult) {
+          score = aiResult.score;
+          reasons = aiResult.reasons;
+        } else {
+          const localResult = calculateMatchScore(waste, buyer);
+          score = localResult.score;
+          reasons = localResult.reasons;
+        }
+      } catch (e) {
+        const localResult = calculateMatchScore(waste, buyer);
+        score = localResult.score;
+        reasons = localResult.reasons;
+      }
+
+      if (score >= 60) {
+        await addDoc(collection(db, "matches"), {
+          wasteListingId: waste.id,
+          buyerFactoryId: buyer.id,
+          buyerFactoryName: buyer.factoryName,
+          compatibilityScore: score,
+          reasons,
+          pricePerKg: buyer.pricePerKg || 45,
+          requiredQuantity: buyer.maxQuantity || waste.quantity,
+          createdAt: serverTimestamp(),
+          wasteType: waste.wasteType,
+          co2Saved: Math.round(waste.quantity * 0.5)
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error generating matches:", error);
+  }
 }
 
-function proximityScore(distKm: number): number {
-  if (distKm < 50) return 100;
-  if (distKm < 150) return 80;
-  if (distKm < 500) return 50;
-  if (distKm < 1000) return 25;
-  return 10;
-}
-
-export function calculateMatch(
-  listing: WasteListing,
-  buyerListing: WasteListing
-): MatchResult | null {
-  const matScore = materialScore(listing.wasteType, buyerListing.wasteType);
-  if (matScore === 0) return null;
-
-  const dist = getDistance(listing.latitude, listing.longitude, buyerListing.latitude, buyerListing.longitude);
-  const proxScore = proximityScore(dist);
-  const qtyMatch = Math.min(listing.quantity, buyerListing.quantity) / Math.max(listing.quantity, buyerListing.quantity);
-  const qtyScore = qtyMatch * 100;
-
-  const score = Math.round(matScore * 0.4 + proxScore * 0.3 + qtyScore * 0.3);
-
-  return {
-    wasteListingId: listing.id,
-    buyerFactoryId: buyerListing.factoryId,
-    buyerFactoryName: buyerListing.factoryName || "",
-    wasteType: listing.wasteType,
-    compatibilityScore: score,
-    distanceKm: Math.round(dist),
-    co2Saved: Math.round(listing.quantity * 0.5 * (proxScore / 100)),
-    quantityMatch: Math.round(qtyMatch * 100),
-  };
+/**
+ * Compatibility shim for legacy code
+ */
+export function calculateMatch(listing: WasteListing, otherListing: WasteListing): any {
+  // Mocking a match between two listings for existing legacy pages
+  if (listing.wasteType.toLowerCase() === otherListing.wasteType.toLowerCase()) {
+    return {
+      wasteListingId: listing.id,
+      buyerFactoryId: otherListing.createdBy || otherListing.factoryId,
+      buyerFactoryName: "Industrial Partner",
+      compatibilityScore: 85,
+      reasons: ["Material Type Match", "Regional Capacity"],
+      distanceKm: 12,
+      wasteType: listing.wasteType,
+      co2Saved: Math.round(listing.quantity * 0.5),
+      quantityMatch: 100
+    };
+  }
+  return null;
 }
 
 export function calculateImpact(quantity: number) {

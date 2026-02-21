@@ -32,17 +32,17 @@ const Login = () => {
 
   return (
     <div className="flex min-h-screen gradient-hero">
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-12">
-        <img src={logo} alt="punarCYCLE" className="w-72 mb-8" />
-        <h1 className="text-3xl font-display font-bold text-gradient mb-4">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-12 animate-slide-up">
+        <img src={logo} alt="punarCYCLE" className="w-72 mb-8 animate-fade-in" />
+        <h1 className="text-3xl font-display font-bold text-gradient mb-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
           Reuse · Trade · Sustain
         </h1>
-        <p className="text-muted-foreground text-center max-w-md text-lg">
+        <p className="text-muted-foreground text-center max-w-md text-lg animate-fade-in" style={{ animationDelay: '0.4s' }}>
           AI-powered B2B circular economy marketplace. Convert industrial waste into valuable raw materials.
         </p>
       </div>
       <div className="flex w-full lg:w-1/2 items-center justify-center p-8">
-        <Card className="w-full max-w-md border-border/50">
+        <Card className="w-full max-w-md border-border/50 hover-lift animate-scale-in">
           <CardHeader className="text-center space-y-2">
             <div className="flex items-center justify-center gap-2 lg:hidden mb-4">
               <img src={logo} alt="punarCYCLE" className="w-16" />
@@ -53,22 +53,22 @@ const Login = () => {
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive animate-fade-in">{error}</div>
               )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="factory@example.com" required />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="factory@example.com" required className="transition-all focus:ring-2 focus:ring-primary/20" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="transition-all focus:ring-2 focus:ring-primary/20" />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full hover-lift" disabled={loading}>
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
               <p className="text-center text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Link to="/register" className="text-primary font-medium hover:underline">Register your factory</Link>
+                <Link to="/register" className="text-primary font-medium hover:underline transition-colors">Register your factory</Link>
               </p>
             </form>
           </CardContent>
