@@ -1,218 +1,300 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, deleteDoc, doc, query, where, updateDoc, serverTimestamp } from "firebase/firestore";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Package, MapPin, Scale, AlertTriangle, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "@/hooks/use-toast";
-import type { WasteListing } from "@/lib/matching";
+import { Plus, Trash2, Package, MapPin, Scale, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import { generateMatchesForWaste } from "@/lib/matching";
 
-const WASTE_TYPES = ["Plastic Scrap", "Fly Ash", "Metal Scrap", "Chemical Waste", "Textile Waste", "Organic Waste", "Glass Waste", "Rubber Waste", "Wood Waste", "E-Waste"];
+interface WasteListing {
+    id: string;
+    wasteType: string;
+    quantity: number;
+    city: string;
+    hazardous: boolean;
+    createdAt: any;
+}
 
-const emptyForm = {
-  wasteType: "",
-  quantity: "",
-  city: "",
-  hazardous: false,
-};
+const WASTE_TYPE_OPTIONS = [
+    "Plastic scrap",
+    "Steel slag",
+    "Aluminum scrap",
+    "Copper scrap",
+    "Cotton waste",
+    "Textile offcuts",
+    "Paper & cardboard",
+    "Wood chips / sawdust",
+    "Glass cullet",
+    "Rubber scrap",
+    "Chemical effluents (treated)",
+    "Organic waste",
+    "E-waste (processed)",
+    "Battery scrap",
+    "Oil & grease waste",
+    "Metal shavings",
+    "Ceramic waste",
+    "Other",
+];
 
 const WasteListings = () => {
-  const { user, profile } = useAuth();
-  const [listings, setListings] = useState<WasteListing[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+    const { user } = useAuth();
+    const [listings, setListings] = useState<WasteListing[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showAddForm, setShowAddForm] = useState(false);
 
-  const load = async () => {
-    if (!user) return;
-    const snap = await getDocs(query(collection(db, "wasteListings"), where("createdBy", "==", user.uid)));
-    const realListings = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WasteListing));
-    setListings(realListings);
-  };
+    // Form State
+    const [wasteType, setWasteType] = useState("");
+    const [quantity, setQuantity] = useState("");
+    const [city, setCity] = useState("");
+    const [hazardous, setHazardous] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => { load(); }, [user]);
-
-  const handleSubmit = async () => {
-    if (!user || !form.wasteType || !form.quantity) return;
-    setLoading(true);
-    try {
-      const data = {
-        wasteType: form.wasteType.toLowerCase(),
-        quantity: parseFloat(form.quantity),
-        city: form.city || profile?.location || "",
-        hazardous: form.hazardous,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-      };
-
-      let listingId: string;
-      if (editId) {
-        await updateDoc(doc(db, "wasteListings", editId), data);
-        listingId = editId;
-        toast({ title: "Inventory updated", description: "Material specifications successfully synchronized." });
-      } else {
-        const docRef = await addDoc(collection(db, "wasteListings"), data);
-        listingId = docRef.id;
-
+    const fetchListings = async () => {
+        if (!user) return;
         try {
-          await generateMatchesForWaste(listingId);
-          toast({ title: "Asset published", description: "Listing live & AI matching engine cycle complete." });
-        } catch (matchError) {
-          console.error("Error generating matches:", matchError);
-          toast({ title: "Asset published", description: "Listing saved. Background analysis pending." });
+            const q = query(collection(db, "wasteListings"), where("createdBy", "==", user.uid));
+            const querySnapshot = await getDocs(q);
+            const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as WasteListing[];
+            setListings(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        } catch (error) {
+            console.error("Error fetching listings:", error);
+            toast.error("Failed to load listings");
+        } finally {
+            setLoading(false);
         }
-      }
+    };
 
-      setForm(emptyForm);
-      setEditId(null);
-      setOpen(false);
-      load();
-    } catch (error) {
-      console.error("Error saving listing:", error);
-      toast({ title: "Error", description: "Failed to sync inventory. Please try again." });
-    } finally {
-      setLoading(false);
-    }
-  };
+    useEffect(() => {
+        fetchListings();
+    }, [user]);
 
-  const handleEdit = (l: WasteListing) => {
-    setForm({
-      wasteType: l.wasteType,
-      quantity: String(l.quantity),
-      city: l.city || "",
-      hazardous: !!l.hazardous,
-    });
-    setEditId(l.id);
-    setOpen(true);
-  };
+    const handleAddListing = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        if (!wasteType?.trim()) {
+            toast.error("Please select a material type");
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const docRef = await addDoc(collection(db, "wasteListings"), {
+                wasteType,
+                quantity: parseFloat(quantity),
+                city,
+                hazardous,
+                createdBy: user.uid,
+                factoryId: user.uid,
+                createdAt: serverTimestamp(),
+            });
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "wasteListings", id));
-      load();
-      toast({ title: "Asset removed", description: "Listing successfully purged from inventory." });
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to remove asset." });
-    }
-  };
+            toast.success("Listing created successfully!");
 
-  return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Material Inventory</h1>
-          <p className="text-slate-500 mt-1 uppercase text-[10px] font-black tracking-widest">Global Resource Management</p>
-        </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyForm); setEditId(null); } }}>
-          <DialogTrigger asChild>
-            <Button className="rounded-2xl h-12 px-6 shadow-xl shadow-primary/20"><Plus className="h-4.5 w-4.5 mr-2" /> Publish Asset</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md rounded-[2.5rem] p-10">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold text-slate-900">{editId ? "Material Modification" : "Publish New Resource"}</DialogTitle>
-              <p className="text-slate-400 text-sm font-medium">Specify industrial material parameters for AI discovery.</p>
-            </DialogHeader>
-            <div className="space-y-6 pt-6">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Material Category</Label>
-                <Select value={form.wasteType} onValueChange={(v) => setForm((p) => ({ ...p, wasteType: v }))}>
-                  <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-slate-50/50"><SelectValue placeholder="Select type" /></SelectTrigger>
-                  <SelectContent className="rounded-2xl">{WASTE_TYPES.map((t) => <SelectItem key={t} value={t.toLowerCase()}>{t}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Quantity (kg)</Label>
-                  <Input type="number" className="h-12 rounded-xl border-slate-200 bg-slate-50/50" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} placeholder="0.00" />
+            // Trigger AI Matching
+            try {
+                await generateMatchesForWaste(docRef.id);
+                toast.success("AI is analyzing potential matches...");
+            } catch (matchError) {
+                console.error("Matching error:", matchError);
+            }
+
+            // Reset form
+            setWasteType("");
+            setQuantity("");
+            setCity("");
+            setHazardous(false);
+            setShowAddForm(false);
+            fetchListings();
+        } catch (error) {
+            console.error("Error adding listing:", error);
+            toast.error("Failed to create listing");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteListing = async (id: string) => {
+        try {
+            await deleteDoc(doc(db, "wasteListings", id));
+            toast.success("Listing deleted");
+            setListings(listings.filter(l => l.id !== id));
+        } catch (error) {
+            toast.error("Failed to delete listing");
+        }
+    };
+
+    return (
+        <div className="space-y-8 max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Material Inventory</h1>
+                    <p className="text-slate-500 mt-1">Manage your industrial waste streams and surplus assets</p>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Origin City</Label>
-                  <Input className="h-12 rounded-xl border-slate-200 bg-slate-50/50" value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} placeholder="e.g. Pune" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${form.hazardous ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-                    {form.hazardous ? <AlertTriangle className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Safety Protocol</p>
-                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">{form.hazardous ? "Hazardous Handling" : "Standard Resource"}</p>
-                  </div>
-                </div>
-                <Switch checked={form.hazardous} onCheckedChange={(v) => setForm((p) => ({ ...p, hazardous: v }))} />
-              </div>
-              <Button onClick={handleSubmit} className="w-full h-14 text-lg font-bold rounded-2xl shadow-2xl shadow-primary/20" disabled={loading}>
-                {loading ? "Processing..." : editId ? "Execute Update" : "Confirm Publication"}
-              </Button>
+                <Button
+                    onClick={() => setShowAddForm(!showAddForm)}
+                    className="bg-primary hover:bg-primary/90 text-white gap-2 h-11 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all font-semibold"
+                >
+                    {showAddForm ? "Cancel" : <><Plus className="h-5 w-5" /> New Listing</>}
+                </Button>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      {listings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-40 border-2 border-dashed border-slate-200 rounded-[3rem] bg-slate-50/40">
-          <div className="h-24 w-24 rounded-[2rem] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] flex items-center justify-center mb-10">
-            <Package className="h-10 w-10 text-primary" />
-          </div>
-          <h3 className="text-2xl font-bold text-slate-900 mb-2">Inventory Empty</h3>
-          <p className="text-slate-500 max-w-sm text-center font-medium leading-relaxed mb-10">
-            Your circular resource cycle hasn't started yet. Initialize your first asset discovery below.
-          </p>
-          <Button variant="outline" className="h-12 px-8 rounded-2xl border-slate-200 bg-white" onClick={() => setOpen(true)}>
-            <Plus className="h-4.5 w-4.5 mr-2" /> Create First Listing
-          </Button>
+            {showAddForm && (
+                <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] animate-in fade-in slide-in-from-top-4 duration-300 overflow-hidden">
+                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
+                        <CardTitle className="text-lg font-bold text-slate-800">Create Asset Listing</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-8">
+                        <form onSubmit={handleAddListing} className="grid md:grid-cols-2 gap-8">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="type" className="text-xs font-bold uppercase tracking-wider text-slate-500">Material Type</Label>
+                                    <Select value={wasteType || undefined} onValueChange={setWasteType}>
+                                        <SelectTrigger id="type" className="h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-xl">
+                                            <SelectValue placeholder="Select material type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {WASTE_TYPE_OPTIONS.map((opt) => (
+                                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="quantity" className="text-xs font-bold uppercase tracking-wider text-slate-500">Quantity (kg)</Label>
+                                    <Input
+                                        id="quantity"
+                                        type="number"
+                                        placeholder="500"
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(e.target.value)}
+                                        required
+                                        className="h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-xl"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="city" className="text-xs font-bold uppercase tracking-wider text-slate-500">Origin City</Label>
+                                    <Input
+                                        id="city"
+                                        placeholder="e.g. Mumbai, Bangalore"
+                                        value={city}
+                                        onChange={(e) => setCity(e.target.value)}
+                                        required
+                                        className="h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-xl"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-3 pt-8">
+                                    <div
+                                        className={`p-1.5 rounded-lg transition-colors ${hazardous ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-400"}`}
+                                        onClick={() => setHazardous(!hazardous)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <AlertTriangle className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <Label className="text-sm font-bold text-slate-700">Hazardous Material</Label>
+                                        <p className="text-xs text-slate-400">Mark if material requires specialized handling</p>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={hazardous}
+                                        onChange={(e) => setHazardous(e.target.checked)}
+                                        className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                </div>
+                                <div className="pt-4">
+                                    <Button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all shadow-xl shadow-slate-900/10"
+                                    >
+                                        {isSubmitting ? "Processing..." : "Publish to Marketplace"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {loading ? (
+                    Array(3).fill(0).map((_, i) => (
+                        <div key={i} className="h-64 rounded-3xl bg-slate-50 animate-pulse border border-slate-100" />
+                    ))
+                ) : listings.length === 0 ? (
+                    <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-slate-100">
+                        <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Package className="h-8 w-8 text-slate-300" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800">No active listings</h3>
+                        <p className="text-slate-400 max-w-xs mx-auto mt-2">Start by listing your industrial surplus to find matching circular economy partners.</p>
+                        <Button
+                            variant="outline"
+                            className="mt-6 border-slate-200 hover:bg-slate-50"
+                            onClick={() => setShowAddForm(true)}
+                        >
+                            Post First Asset
+                        </Button>
+                    </div>
+                ) : (
+                    listings.map((item) => (
+                        <Card key={item.id} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.03)] group overflow-hidden hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-300">
+                            <CardContent className="p-0">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="h-12 w-12 rounded-2xl bg-primary/5 text-primary flex items-center justify-center">
+                                            <Package className="h-6 w-6" />
+                                        </div>
+                                        {item.hazardous ? (
+                                            <span className="bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-amber-100">Hazardous</span>
+                                        ) : (
+                                            <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-emerald-100 whitespace-nowrap overflow-hidden">Verified Safe</span>
+                                        )}
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-800 mb-1 capitalize truncate">{item.wasteType}</h3>
+                                    <div className="flex items-center gap-1.5 text-slate-400 text-sm mb-6">
+                                        <MapPin className="h-3.5 w-3.5" /> {item.city}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Quantity</p>
+                                            <p className="text-lg font-bold text-slate-800 flex items-center gap-1.5">
+                                                <Scale className="h-4 w-4 text-primary" /> {item.quantity} kg
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">AI Status</p>
+                                            <p className="text-sm font-bold text-emerald-500 flex items-center justify-end gap-1">
+                                                <CheckCircle2 className="h-4 w-4" /> Active
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 px-6 py-4 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-xs font-semibold text-slate-400">Created {new Date(item.createdAt?.seconds * 1000).toLocaleDateString()}</span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                        onClick={() => handleDeleteListing(item.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
+            </div>
         </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {listings.map((l) => (
-            <Card key={l.id} className="overflow-hidden border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_50px_rgb(0,0,0,0.08)] transition-all duration-500 bg-white rounded-[2.5rem] group border border-slate-100">
-              <CardContent className="p-8">
-                <div className="flex items-start justify-between mb-8">
-                  <div className="h-14 w-14 bg-slate-50 group-hover:bg-primary/5 rounded-[1.25rem] flex items-center justify-center transition-colors">
-                    <Package className="h-7 w-7 text-primary/60 group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-900" onClick={() => handleEdit(l)}><Edit className="h-4.5 w-4.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-destructive/10 text-slate-400 hover:text-destructive" onClick={() => handleDelete(l.id)}><Trash2 className="h-4.5 w-4.5" /></Button>
-                  </div>
-                </div>
-
-                <h3 className="text-xl font-bold text-slate-900 capitalize tracking-tight leading-none mb-3">{l.wasteType}</h3>
-
-                <div className="flex flex-wrap gap-2 mb-8">
-                  <Badge className={`${l.hazardous ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-slate-100 text-slate-600 hover:bg-slate-100'} border-none px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest`}>
-                    {l.hazardous ? "High Precision Required" : "Standard Handling"}
-                  </Badge>
-                  {l.hazardous && <Badge variant="destructive" className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-none">Hazardous</Badge>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 border-t border-slate-50 pt-6">
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Scale className="h-3 w-3" /> Available</p>
-                    <p className="font-bold text-slate-800 tracking-tight">{l.quantity.toLocaleString()} kg</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><MapPin className="h-3 w-3" /> Location</p>
-                    <p className="font-bold text-slate-800 tracking-tight">{l.city || "Mumbai"}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default WasteListings;

@@ -2,17 +2,18 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
 import {
-  LayoutDashboard, Package, Zap, Handshake, Leaf, TrendingUp, User, LogOut, Menu, X,
+  LayoutDashboard, Package, Zap, Handshake, TrendingUp, User, LogOut, Menu, FileText, Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 const NAV = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/dashboard/consumer-requirements", icon: FileText, label: "Consumer Requirements" },
   { to: "/dashboard/listings", icon: Package, label: "Waste Listings" },
+  { to: "/dashboard/marketplace", icon: Store, label: "Marketplace" },
   { to: "/dashboard/matches", icon: Zap, label: "AI Matches" },
   { to: "/dashboard/deals", icon: Handshake, label: "Deals" },
-  { to: "/dashboard/impact", icon: Leaf, label: "Impact" },
   { to: "/dashboard/forecasting", icon: TrendingUp, label: "Forecasting" },
   { to: "/dashboard/profile", icon: User, label: "Profile" },
 ];
@@ -27,7 +28,7 @@ const DashboardLayout = () => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border">
-        <img src={logo} alt="punarCYCLE" className="w-40" />
+        <img src={logo} alt="punarCYCLE" className="w-28" />
       </div>
       {profile && (
         <div className="px-4 py-3 border-b border-sidebar-border">

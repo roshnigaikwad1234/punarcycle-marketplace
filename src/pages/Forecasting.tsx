@@ -1,165 +1,251 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TrendingUp, Sparkles, ArrowRight, BarChart3, Binary, Zap } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { toast } from "@/hooks/use-toast";
+import { Plus, Trash2, Calendar, Package, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
-const WASTE_TYPES = ["Plastic Scrap", "Fly Ash", "Metal Scrap", "Chemical Waste", "Textile Waste", "Organic Waste"];
+const MATERIAL_TYPE_OPTIONS = [
+  "Plastic scrap",
+  "Steel slag",
+  "Aluminum scrap",
+  "Copper scrap",
+  "Cotton waste",
+  "Textile offcuts",
+  "Paper & cardboard",
+  "Wood chips / sawdust",
+  "Glass cullet",
+  "Rubber scrap",
+  "Chemical effluents (treated)",
+  "Organic waste",
+  "E-waste (processed)",
+  "Battery scrap",
+  "Oil & grease waste",
+  "Metal shavings",
+  "Ceramic waste",
+  "Other",
+];
+
+const TIMEFRAME_OPTIONS = [
+  { value: "6", label: "6 months" },
+  { value: "8", label: "8 months" },
+];
+
+export interface Forecast {
+  id: string;
+  materialType: string;
+  quantity: number;
+  timeframeMonths: number;
+  location: string;
+  createdBy: string;
+  createdAt: unknown;
+}
 
 const Forecasting = () => {
-  const { user, profile } = useAuth();
-  const [form, setForm] = useState({ wasteType: "", monthlyProduction: "", growthRate: "5" });
-  const [forecast, setForecast] = useState<{ month: string; waste: number }[] | null>(null);
+  const { user } = useAuth();
+  const [forecasts, setForecasts] = useState<Forecast[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [materialType, setMaterialType] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [timeframeMonths, setTimeframeMonths] = useState("6");
+  const [location, setLocation] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const generateForecast = () => {
-    const base = parseFloat(form.monthlyProduction);
-    const growth = parseFloat(form.growthRate) / 100;
-    if (!base) return;
-
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const currentMonth = new Date().getMonth();
-    const data = [];
-    for (let i = 0; i < 6; i++) {
-      const mIdx = (currentMonth + i + 1) % 12;
-      const wasteRatio = 0.18 + Math.random() * 0.07;
-      const waste = Math.round(base * (1 + growth) ** i * wasteRatio);
-      data.push({ month: months[mIdx], waste });
+  const fetchForecasts = async () => {
+    if (!user) return;
+    try {
+      const q = query(collection(db, "forecasts"), where("createdBy", "==", user.uid));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Forecast[];
+      const sortKey = (x: Forecast) => (x.createdAt as { seconds?: number })?.seconds ?? 0;
+      setForecasts(data.sort((a, b) => sortKey(b) - sortKey(a)));
+    } catch (error) {
+      console.error("Error fetching forecasts:", error);
+      toast.error("Failed to load forecasts");
+    } finally {
+      setLoading(false);
     }
-    setForecast(data);
-    toast({ title: "Analysis Complete", description: "6-month algorithmic projection generated." });
   };
 
-  const preList = async () => {
-    if (!user || !forecast || !form.wasteType) return;
-    const total = forecast.reduce((a, b) => a + b.waste, 0);
-    await addDoc(collection(db, "wasteListings"), {
-      factoryId: user.uid,
-      factoryName: profile?.name || "",
-      wasteType: form.wasteType.toLowerCase(),
-      quantity: total,
-      unit: "kg",
-      frequency: "Monthly",
-      location: profile?.location || "",
-      hazardous: false,
-      createdAt: serverTimestamp(),
-      isForecast: true,
-    });
-    toast({ title: "Strategic Pre-Listing Success", description: "Marketplace pre-discovery initiated for future capacity." });
+  useEffect(() => {
+    fetchForecasts();
+  }, [user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (!materialType?.trim()) {
+      toast.error("Please select a material type");
+      return;
+    }
+    const qty = parseFloat(quantity);
+    if (isNaN(qty) || qty <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, "forecasts"), {
+        materialType: materialType.trim(),
+        quantity: qty,
+        timeframeMonths: parseInt(timeframeMonths, 10),
+        location: location.trim() || "—",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      toast.success("Forecast added. Use it to arrange pre-deals with partners.");
+      setMaterialType("");
+      setQuantity("");
+      setTimeframeMonths("6");
+      setLocation("");
+      setShowForm(false);
+      fetchForecasts();
+    } catch (error) {
+      console.error("Error adding forecast:", error);
+      toast.error("Failed to add forecast");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "forecasts", id));
+      setForecasts((prev) => prev.filter((f) => f.id !== id));
+      toast.success("Forecast removed");
+    } catch {
+      toast.error("Failed to delete");
+    }
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12 animate-fade-in">
+    <div className="space-y-8 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3">
-            <Binary className="h-3.5 w-3.5" /> High-Fidelity Simulation
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Predictive Resource Forecasting</h1>
-          <p className="text-slate-500 mt-1 font-medium italic">"Anticipate surplus. Eliminate lag. Automate circularity."</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Forecasting</h1>
+          <p className="text-slate-500 mt-1">Tell partners how much waste you expect in 6 or 8 months and arrange pre-deals</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Engine Status</p>
-            <p className="text-xs font-bold text-primary">Neural Match Active</p>
-          </div>
-          <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <Zap className="h-5 w-5 text-primary animate-pulse" />
-          </div>
-        </div>
+        <Button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-primary hover:bg-primary/90 text-white gap-2 h-11 px-6 rounded-xl font-semibold"
+        >
+          {showForm ? "Cancel" : <><Plus className="h-5 w-5" /> Add forecast</>}
+        </Button>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2.5rem] p-4 flex flex-col">
-          <CardHeader className="p-6">
-            <CardTitle className="text-xl font-bold flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" /> Parameters
+      {showForm && (
+        <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
+            <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Calendar className="h-5 w-5" /> Expected waste (future)
             </CardTitle>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Input Production Variables</p>
           </CardHeader>
-          <CardContent className="p-6 space-y-6 flex-1">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Target Material</Label>
-              <Select value={form.wasteType} onValueChange={(v) => setForm((p) => ({ ...p, wasteType: v }))}>
-                <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-slate-50/50"><SelectValue placeholder="Select Category" /></SelectTrigger>
-                <SelectContent className="rounded-2xl">{WASTE_TYPES.map((t) => <SelectItem key={t} value={t.toLowerCase()}>{t}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Monthly Ops (kg)</Label>
-              <Input type="number" className="h-12 rounded-xl border-slate-200 bg-slate-50/50" value={form.monthlyProduction} onChange={(e) => setForm((p) => ({ ...p, monthlyProduction: e.target.value }))} placeholder="10000" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Projected Growth (%)</Label>
-              <Input type="number" className="h-12 rounded-xl border-slate-200 bg-slate-50/50" value={form.growthRate} onChange={(e) => setForm((p) => ({ ...p, growthRate: e.target.value }))} />
-            </div>
-            <div className="pt-4 mt-auto">
-              <Button onClick={generateForecast} className="w-full h-14 text-sm font-bold rounded-2xl shadow-xl shadow-primary/20" disabled={!form.wasteType || !form.monthlyProduction}>
-                Initialize Projection Lifecycle
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {forecast ? (
-          <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2.5rem] overflow-hidden">
-            <CardHeader className="p-8 pb-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-primary" /> Output Projection
-                  </CardTitle>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">6-Month Strategic Yield</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Total Capacity</p>
-                  <p className="text-2xl font-bold text-slate-900 tracking-tighter mt-1">{forecast.reduce((a, b) => a + b.waste, 0).toLocaleString()} kg</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-8 pt-10">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={forecast}>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 600 }} dy={10} />
-                  <YAxis hide />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(0,0,0,0.02)' }}
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-                  />
-                  <Bar dataKey="waste" radius={[12, 12, 12, 12]} barSize={40}>
-                    {forecast.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index === 5 ? 'hsl(153,60%,37%)' : 'rgba(15, 23, 42, 0.05)'} />
+          <CardContent className="p-8">
+            <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Material type</Label>
+                <Select value={materialType || undefined} onValueChange={setMaterialType}>
+                  <SelectTrigger className="h-12 rounded-xl">
+                    <SelectValue placeholder="Select material" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MATERIAL_TYPE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                     ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-10 flex flex-col md:flex-row items-center justify-between p-6 bg-slate-900 rounded-[2rem] text-white gap-6">
-                <div className="relative">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Insight Recommendation</p>
-                  <p className="text-sm font-medium mt-1">Pre-list this surplus now to secure high-value industrial bids.</p>
-                </div>
-                <Button onClick={preList} className="bg-primary text-white hover:bg-primary/90 font-bold h-12 px-8 rounded-xl shrink-0 white-glow">
-                  Execute Pre-Discovery <ArrowRight className="ml-2 h-4 w-4" />
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Expected quantity (kg)</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 2000"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  min={1}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">In how many months?</Label>
+                <Select value={timeframeMonths} onValueChange={setTimeframeMonths}>
+                  <SelectTrigger className="h-12 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEFRAME_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Location (city)</Label>
+                <Input
+                  placeholder="e.g. Mumbai, Pune"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Button type="submit" disabled={isSubmitting} className="h-12 rounded-xl font-semibold">
+                  {isSubmitting ? "Saving..." : "Save forecast"}
                 </Button>
               </div>
-            </CardContent>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <div>
+        <h2 className="text-lg font-bold text-slate-900 mb-4">Your forecasts</h2>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-44 rounded-2xl bg-slate-50 animate-pulse border border-slate-100" />
+            ))}
+          </div>
+        ) : forecasts.length === 0 ? (
+          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.03)] p-12 text-center rounded-[2rem]">
+            <div className="h-14 w-14 bg-primary/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Calendar className="h-7 w-7 text-primary/50" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800">No forecasts yet</h3>
+            <p className="text-slate-400 max-w-sm mx-auto mt-2">Add expected waste (e.g. in 6 or 8 months) to arrange pre-deals with buyers or suppliers.</p>
+            <Button className="mt-6" onClick={() => setShowForm(true)}>Add first forecast</Button>
           </Card>
         ) : (
-          <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2.5rem] bg-slate-50/50 border-2 border-dashed border-slate-200">
-            <CardContent className="h-full flex flex-col items-center justify-center p-20 text-center">
-              <div className="h-20 w-20 bg-white shadow-sm rounded-[1.5rem] flex items-center justify-center mb-8">
-                <Binary className="h-8 w-8 text-slate-200" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-400">Awaiting Simulation Parameters</h3>
-              <p className="text-slate-400 text-sm mt-2 max-w-xs font-medium">Input your production variables on the left to initialize the neural forecasting engine.</p>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {forecasts.map((f) => (
+              <Card key={f.id} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden group">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="h-10 w-10 rounded-xl bg-primary/5 text-primary flex items-center justify-center">
+                      <Package className="h-5 w-5" />
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => handleDelete(f.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 capitalize">{f.materialType}</h3>
+                  <p className="text-sm text-slate-500 mt-1">{f.quantity.toLocaleString()} kg in {f.timeframeMonths} months</p>
+                  {f.location && f.location !== "—" && <p className="text-xs text-slate-400 mt-1">{f.location}</p>}
+                  <Link to="/dashboard/matches" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                    Create pre-deal for this forecast <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </div>
     </div>

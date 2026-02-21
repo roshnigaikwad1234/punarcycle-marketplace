@@ -1,199 +1,224 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Leaf,
+    BarChart3,
+    TrendingUp,
+    Droplets,
+    Globe2,
+    Award,
+    ArrowUpRight,
+    Download,
+    Share2
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Leaf, Droplets, Zap as ZapIcon, Trash, BarChart3, Globe, ShieldCheck, TrendingUp } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ResponsiveContainer,
+    Cell,
+    PieChart,
+    Pie,
+    LineChart,
+    Line
+} from "recharts";
 
 const Impact = () => {
-  const { user } = useAuth();
-  const [totals, setTotals] = useState({ co2: 0, waste: 0, energy: 0, deals: 0 });
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const [stats, setStats] = useState({
+        totalCo2: 0,
+        wasteDiverted: 0,
+        dealsCompleted: 0,
+        waterSaved: 0
+    });
+    const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const snap = await getDocs(collection(db, "deals"));
-        let co2 = 0, waste = 0, energy = 0, completed = 0;
-        const monthly: Record<string, number> = {};
+    useEffect(() => {
+        const fetchImpact = async () => {
+            if (!user) return;
+            try {
+                const q = query(collection(db, "deals"), where("status", "==", "completed"));
+                const snapshot = await getDocs(q);
 
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          if ((data.buyerFactoryId === user.uid || data.sellerFactoryId === user.uid) && data.status === "completed") {
-            const quantity = data.quantity || 0;
-            const savedCo2 = data.co2Saved || (quantity * 0.5);
-            co2 += savedCo2;
-            waste += quantity;
-            energy += (quantity * 0.3);
-            completed++;
+                let co2 = 0;
+                let waste = 0;
+                let deals = 0;
 
-            const date = data.createdAt?.toDate?.() || new Date();
-            const month = date.toLocaleString("default", { month: "short" });
-            monthly[month] = (monthly[month] || 0) + savedCo2;
-          }
-        });
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.buyerFactoryId === user.uid || data.sellerFactoryId === user.uid) {
+                        co2 += data.co2Saved || 0;
+                        waste += data.quantity || 0;
+                        deals++;
+                    }
+                });
 
-        setTotals({
-          co2: Math.round(co2),
-          waste: Math.round(waste),
-          energy: Math.round(energy),
-          deals: completed
-        });
+                setStats({
+                    totalCo2: co2,
+                    wasteDiverted: waste,
+                    dealsCompleted: deals,
+                    waterSaved: Math.round(waste * 0.8) // Estimated 0.8L per kg
+                });
+            } catch (error) {
+                console.error("Error fetching impact:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchImpact();
+    }, [user]);
 
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const currentMonthIdx = new Date().getMonth();
-        const last6Months = [];
-        for (let i = 5; i >= 0; i--) {
-          const idx = (currentMonthIdx - i + 12) % 12;
-          const m = months[idx];
-          last6Months.push({ month: m, co2: monthly[m] || 0 });
-        }
+    const chartData = [
+        { month: "Jan", co2: 120, waste: 400 },
+        { month: "Feb", co2: 210, waste: 750 },
+        { month: "Mar", co2: 450, waste: 1200 },
+        { month: "Apr", co2: 380, waste: 900 },
+        { month: "May", co2: 600, waste: 1500 },
+        { month: "Jun", co2: 850, waste: 2100 },
+    ];
 
-        setChartData(completed > 0 ? last6Months : []);
-      } catch (error) {
-        console.error("Error loading impact data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [user]);
+    const categoryData = [
+        { name: "Plastic", value: 45, color: "hsl(153,60%,37%)" },
+        { name: "Metal", value: 30, color: "hsl(215,25%,27%)" },
+        { name: "Rubber", value: 15, color: "hsl(217,91%,60%)" },
+        { name: "Other", value: 10, color: "hsl(38,92%,50%)" },
+    ];
 
-  const cards = [
-    { icon: Globe, label: "Net Carbon Offset", value: `${totals.co2.toLocaleString()} kg`, sub: "Verified CO₂-e Reduction", color: "text-primary" },
-    { icon: Trash, label: "Resource Recovery", value: `${totals.waste.toLocaleString()} kg`, sub: "Landfill Diversion Metric", color: "text-slate-600" },
-    { icon: ZapIcon, label: "Energy Conservation", value: `${Math.round(totals.energy).toLocaleString()} kWh`, sub: "Industrial Eq. Savings", color: "text-primary" },
-    { icon: ShieldCheck, label: "Circular Compliance", value: totals.deals, sub: "Verified Deal Closures", color: "text-slate-600" },
-  ];
+    const metrics = [
+        { label: "Carbon Offset", value: `${stats.totalCo2} kg`, sub: "CO₂-e reduced", icon: Globe2, color: "text-emerald-600", bg: "bg-emerald-50" },
+        { label: "Waste Diverted", value: `${stats.wasteDiverted} kg`, sub: "Circular recycling", icon: BarChart3, color: "text-blue-600", bg: "bg-blue-50" },
+        { label: "Water Conservation", value: `${stats.waterSaved} L`, sub: "Process avoidance", icon: Droplets, color: "text-indigo-600", bg: "bg-indigo-50" },
+        { label: "Closed Loops", value: stats.dealsCompleted, sub: "Completed trades", icon: Award, color: "text-amber-600", bg: "bg-amber-50" },
+    ];
 
-  return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12 animate-fade-in">
-      <div className="relative overflow-hidden bg-slate-900 rounded-[2.5rem] p-10 md:p-14 text-white">
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 bg-primary/20 text-primary border border-primary/20 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6">
-            <Leaf className="h-3.5 w-3.5" /> ESG Performance Report
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">Sustainability Environmental Impact</h1>
-          <p className="text-slate-400 text-lg font-medium leading-relaxed">
-            Quantifying your factory's contribution to global carbon neutrality through verified industrial circularity.
-          </p>
-        </div>
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full translate-x-32 -translate-y-32 blur-[100px]" />
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-40">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mb-4" />
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Processing ESG Metrics...</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {cards.map((c, i) => (
-              <Card key={i} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] group hover:shadow-[0_15px_40px_rgb(0,0,0,0.08)] transition-all">
-                <CardContent className="p-8">
-                  <div className={`h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 group-hover:bg-primary/5 transition-colors ${c.color}`}>
-                    <c.icon className="h-6 w-6" />
-                  </div>
-                  <p className="text-3xl font-bold text-slate-900 tracking-tighter">{c.value}</p>
-                  <p className="text-sm font-bold text-slate-800 mt-2">{c.label}</p>
-                  <p className="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-widest">{c.sub}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-8">
-            <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2.5rem] overflow-hidden">
-              <CardHeader className="p-8 pb-0 flex flex-row items-center justify-between">
+    return (
+        <div className="space-y-8 max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                  <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-primary" /> CO₂ Mitigation Trend
-                  </CardTitle>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">6-Month Operational Analysis</p>
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">ESG Performance</h1>
+                    <p className="text-slate-500 mt-1">Real-time quantification of your industrial sustainability footprint</p>
                 </div>
-                <div className="hidden sm:flex items-center gap-2 text-primary font-bold text-xs bg-primary/5 px-4 py-2 rounded-full border border-primary/10">
-                  <TrendingUp className="h-3.5 w-3.5" /> +12.4% vs Last Quarter
+                <div className="flex gap-3">
+                    <Button variant="outline" className="rounded-xl border-slate-200 font-bold text-xs uppercase tracking-widest gap-2">
+                        <Download className="h-4 w-4" /> Export Report
+                    </Button>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest gap-2">
+                        <Share2 className="h-4 w-4" /> Share Progress
+                    </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="p-8 pt-10">
-                {totals.deals > 0 ? (
-                  <div className="h-[320px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="impactGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(153,60%,37%)" stopOpacity={0.15} />
-                            <stop offset="95%" stopColor="hsl(153,60%,37%)" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} dy={10} />
-                        <YAxis hide />
-                        <Tooltip
-                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-                          itemStyle={{ fontSize: '11px', fontWeight: 800 }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="co2"
-                          stroke="hsl(153,60%,37%)"
-                          strokeWidth={4}
-                          fill="url(#impactGrad)"
-                          animationDuration={2000}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-[2rem] bg-slate-50/30">
-                    <Leaf className="h-12 w-12 mx-auto text-slate-200 mb-6" />
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">Insufficient ESG Data</h3>
-                    <p className="text-slate-500 max-w-sm mx-auto mb-8 text-sm font-medium">
-                      Complete your first industrial exchange to activate real-time carbon mitigation visualization.
-                    </p>
-                    <Button variant="outline" className="rounded-xl border-slate-200 bg-white" onClick={() => window.location.href = '/dashboard/listings'}>Initialize Listing</Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            </div>
 
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2.5rem] bg-primary text-white overflow-hidden relative">
-              <CardContent className="p-10 flex flex-col h-full relative z-10">
-                <div className="h-16 w-16 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mb-8">
-                  <Globe className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold mb-4">Circular Leaderboard</h3>
-                <p className="text-white/70 font-medium mb-10 leading-relaxed text-sm">
-                  Your current impact score places you in the <span className="text-white font-bold">Top 15%</span> of industrial recyclers in your region.
-                </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {metrics.map((m, i) => (
+                    <Card key={i} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
+                        <CardContent className="p-6">
+                            <div className={`${m.bg} ${m.color} h-12 w-12 rounded-2xl flex items-center justify-center mb-4`}>
+                                <m.icon className="h-6 w-6" />
+                            </div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{m.label}</p>
+                            <h3 className="text-3xl font-black text-slate-900 leading-none">{m.value}</h3>
+                            <p className="text-xs font-medium text-slate-500 mt-2">{m.sub}</p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
 
-                <div className="space-y-6 flex-1">
-                  <div className="bg-white/10 backdrop-blur px-6 py-4 rounded-2xl border border-white/10">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-1">Global Ranking</p>
-                    <p className="text-xl font-bold">#412 Industrial Hub</p>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur px-6 py-4 rounded-2xl border border-white/10">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60 mb-1">Impact Tier</p>
-                    <p className="text-xl font-bold">Platinum Partner</p>
-                  </div>
-                </div>
+            <div className="grid lg:grid-cols-3 gap-8">
+                <Card className="lg:col-span-2 border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] overflow-hidden">
+                    <CardHeader className="p-8 pb-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-xl font-black text-slate-900">Sustainability Growth</CardTitle>
+                                <p className="text-sm text-slate-500">6-month trend analysis of impact metrics</p>
+                            </div>
+                            <div className="bg-slate-50 p-2 rounded-xl flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold uppercase rounded-lg bg-white shadow-sm">CO₂</Button>
+                                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-bold uppercase rounded-lg text-slate-400">Waste</Button>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-8">
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={chartData}>
+                                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                <YAxis hide />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
+                                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                                />
+                                <Line type="monotone" dataKey="co2" stroke="hsl(153,60%,37%)" strokeWidth={4} dot={{ r: 6, fill: 'white', stroke: 'hsl(153,60%,37%)', strokeWidth: 3 }} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
 
-                <Button className="mt-10 bg-white text-primary hover:bg-slate-50 font-bold h-14 rounded-2xl border-none">
-                  Share ESG Report
-                </Button>
-              </CardContent>
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full translate-x-20 -translate-y-20 blur-[60px]" />
-            </Card>
-          </div>
+                <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] overflow-hidden flex flex-col">
+                    <CardHeader className="p-8 pb-0">
+                        <CardTitle className="text-xl font-black text-slate-900">Material Composition</CardTitle>
+                        <p className="text-sm text-slate-500">Diverted waste by category</p>
+                    </CardHeader>
+                    <CardContent className="p-8 flex-1 flex flex-col justify-center">
+                        <ResponsiveContainer width="100%" height={240}>
+                            <PieChart>
+                                <Pie
+                                    data={categoryData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={8}
+                                    dataKey="value"
+                                >
+                                    {categoryData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="space-y-3 mt-6">
+                            {categoryData.map((c, i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                                        <span className="text-sm font-bold text-slate-700">{c.name}</span>
+                                    </div>
+                                    <span className="text-sm font-black text-slate-900">{c.value}%</span>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden">
+                <div className="relative z-10 grid md:grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-1.5 rounded-full text-xs font-bold border border-emerald-500/20 mb-6">
+                            <Award className="h-4 w-4" /> Top 5% Global Achiever
+                        </div>
+                        <h2 className="text-4xl font-black leading-tight mb-4">You've saved enough CO₂ to power <span className="text-emerald-400">12 industrial plants</span> for a month.</h2>
+                        <p className="text-slate-400 text-lg mb-8">Your contribution to the circular economy is setting a new benchmark for industrial sustainability in your region.</p>
+                        <Button className="bg-white text-slate-900 hover:bg-slate-100 rounded-xl h-12 px-8 font-black uppercase tracking-widest">View Carbon Ledger <ArrowUpRight className="ml-2 h-5 w-5" /></Button>
+                    </div>
+                    <div className="hidden md:flex justify-end">
+                        <div className="h-64 w-64 bg-emerald-500/10 rounded-full border border-emerald-500/20 flex items-center justify-center animate-pulse">
+                            <div className="h-48 w-48 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                                <Leaf className="h-24 w-24 text-emerald-400" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 blur-[100px] -translate-y-1/2 translate-x-1/2 rounded-full" />
+            </div>
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default Impact;

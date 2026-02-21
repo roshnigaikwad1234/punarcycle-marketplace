@@ -26,6 +26,7 @@ const Register = () => {
     produces: "",
     role: "both" as "generator" | "consumer" | "both",
     certificateFile: null as File | null,
+    contactDetailsFile: null as File | null,
   });
 
   const update = (key: string, val: string) => setForm((p) => ({ ...p, [key]: val }));
@@ -43,6 +44,7 @@ const Register = () => {
         produces: form.produces,
         role: form.role,
         certificateVerified: !!form.certificateFile,
+        contactDetailsVerified: !!form.contactDetailsFile,
       });
       navigate("/dashboard");
     } catch (err: any) {
@@ -134,6 +136,25 @@ const Register = () => {
                       <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                         <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="text-xs font-semibold text-green-700">File attached: {form.certificateFile.name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="contactDetails">Company contact details</Label>
+                  <div className="flex flex-col gap-2">
+                    <Input
+                      id="contactDetails"
+                      type="file"
+                      accept="application/pdf,image/*,.doc,.docx"
+                      onChange={(e) => setForm(p => ({ ...p, contactDetailsFile: e.target.files?.[0] || null }))}
+                      className="cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all h-11"
+                    />
+                    {form.contactDetailsFile && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-xs font-semibold text-green-700">Verified: {form.contactDetailsFile.name}</span>
                       </div>
                     )}
                   </div>

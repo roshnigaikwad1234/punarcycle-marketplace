@@ -10,10 +10,11 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import DashboardHome from "./pages/DashboardHome";
+import ConsumerRequirements from "./pages/ConsumerRequirements";
 import WasteListings from "./pages/WasteListings";
+import Marketplace from "./pages/Marketplace";
 import Matches from "./pages/Matches";
 import Deals from "./pages/Deals";
-import Impact from "./pages/Impact";
 import Forecasting from "./pages/Forecasting";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
@@ -42,8 +43,16 @@ const router = createBrowserRouter([
         element: <DashboardHome />,
       },
       {
+        path: "consumer-requirements",
+        element: <ConsumerRequirements />,
+      },
+      {
         path: "listings",
         element: <WasteListings />,
+      },
+      {
+        path: "marketplace",
+        element: <Marketplace />,
       },
       {
         path: "matches",
@@ -52,10 +61,6 @@ const router = createBrowserRouter([
       {
         path: "deals",
         element: <Deals />,
-      },
-      {
-        path: "impact",
-        element: <Impact />,
       },
       {
         path: "forecasting",

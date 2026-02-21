@@ -71,3 +71,53 @@ export async function discoverBuyersWithGemini(waste: any) {
         return null;
     }
 }
+
+/** Consumer requirement: material type, quantity, location. Returns companies that supply/offer this. */
+export async function discoverConsumersWithGemini(requirement: { materialType: string; quantity: number; location: string }) {
+    if (!isApiAvailable) return null;
+    try {
+        const prompt = `Find 4 realistic industrial companies in India that CONSUME or need this raw material (buyers):
+        Material type: ${requirement.materialType}
+        Quantity needed: ${requirement.quantity} kg
+        Preferred location: ${requirement.location}
+        Return ONLY a JSON array of 4 objects, each: {"factoryName": "...", "city": "...", "pricePerKg": number, "compatibilityScore": number, "reasons": ["...", "..."], "requiredQuantity": number, "role": "consumer"}`;
+        const result = await geminiModel.generateContent(prompt);
+        const response = await result.response;
+        const data = extractJson(response.text());
+        return (data && Array.isArray(data)) ? data : null;
+    } catch (e: any) {
+        if (e?.message?.includes('404')) isApiAvailable = false;
+        return null;
+    }
+}
+
+/** Marketplace: generate diverse companies (producers and consumers) with realistic data. */
+export async function getMarketplaceCompaniesWithGemini() {
+    if (!isApiAvailable) return null;
+    try {
+        const prompt = `Generate 8 realistic Indian industrial companies for a circular economy marketplace. Mix of producers (selling waste/surplus) and consumers (buying raw material). Return ONLY a JSON array of 8 objects, each: {"companyName": "...", "city": "...", "role": "producer" or "consumer", "materialType": "...", "quantity": number, "pricePerKg": number, "industryType": "Steel"|"Textile"|"Pharma"|"Electronics"}`;
+        const result = await geminiModel.generateContent(prompt);
+        const response = await result.response;
+        const data = extractJson(response.text());
+        return (data && Array.isArray(data)) ? data : null;
+    } catch (e: any) {
+        if (e?.message?.includes('404')) isApiAvailable = false;
+        return null;
+    }
+}
+
+/** AI Matches: generate 3 sample match cards when user has no listings/requirements. */
+export async function getSampleAiMatches(type: "producer" | "consumer") {
+    if (!isApiAvailable) return null;
+    try {
+        const role = type === "producer" ? "buyers (companies that want to buy waste/surplus)" : "suppliers (companies that sell raw material)";
+        const prompt = `Generate 3 realistic Indian industrial match cards for a circular economy platform. These are ${role}. Return ONLY a JSON array of exactly 3 objects. Each object must have: "companyName" (string, e.g. "Reliance Eco-Industrial"), "city" (string, uppercase e.g. "PUNE"), "materialType" (string, e.g. "Textile Waste" or "Plastic scrap"), "quantity" (number, e.g. 1000), "pricePerKg" (number, 30-80), "compatibilityScore" (number 85-99), "reasons" (array of exactly 3 short strings, e.g. "Strategic location match", "High material recovery efficiency", "Verified scale operations"). Use varied materials and cities.`;
+        const result = await geminiModel.generateContent(prompt);
+        const response = await result.response;
+        const data = extractJson(response.text());
+        return (data && Array.isArray(data)) ? data : null;
+    } catch (e: any) {
+        if (e?.message?.includes('404')) isApiAvailable = false;
+        return null;
+    }
+}
