@@ -1,12 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import {
-  Leaf,
-  Zap,
-  ArrowRight,
-  Recycle,
-} from "lucide-react";
-import logo from "@/assets/logo.png";
+import { Leaf, Zap, ArrowRight, Recycle } from "lucide-react";
+import heroVideo from "@/assets/v1.mp4";
 import logoTransparent from "@/assets/logo.png";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -32,42 +27,42 @@ const Landing = () => {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* ================= NAVBAR ================= */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur border-b border-border">
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <img
-            src={logo}
-            alt="punarCYCLE"
-            style={{ height: '120px', width: 'auto', display: 'block', objectFit: 'contain' }}
-            className="md:h-40"
-          />
-
-          <div className="flex items-center gap-3">
-            {user ? (
-              <Button asChild>
-                <Link to="/dashboard">
-                  Dashboard <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+    <div className="min-h-screen bg-background overflow-hidden">
+      {/* ================= NAVBAR (CLEAN) ================= */}
+      <nav className="fixed top-0 w-full z-50 bg-transparent">
+        <div className="container mx-auto px-4 py-6 flex justify-end">
+          {!user && (
+            <div className="flex gap-3">
+              <Button variant="ghost" asChild>
+                <Link to="/login">Sign In</Link>
               </Button>
-            ) : (
-              <>
-                <Button variant="ghost" asChild>
-                  <Link to="/login">Sign In</Link>
-                </Button>
-                <Button asChild>
-                  <Link to="/register">Get Started</Link>
-                </Button>
-              </>
-            )}
-          </div>
+              <Button asChild>
+                <Link to="/register">Get Started</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </nav>
 
-      {/* ================= HERO ================= */}
-      <section className="pt-32 pb-24 text-center relative">
-        <div className="container mx-auto px-4 max-w-5xl">
-          <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-sm text-primary mb-6">
+      {/* ================= HERO WITH VIDEO ================= */}
+      <section className="relative pt-44 pb-36 text-center text-white">
+        {/* Background Video */}
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src={heroVideo} type="video/mp4" />
+        </video>
+
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-black/55"></div>
+
+        {/* Content */}
+        <div className="relative z-10 container mx-auto px-4 max-w-5xl">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm mb-6">
             <Leaf className="h-4 w-4" /> Reuse • Trade • Sustain
           </div>
 
@@ -76,20 +71,17 @@ const Landing = () => {
             <span className="text-primary">Valuable Resources</span>
           </h1>
 
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-10">
+          <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto mb-10">
             punarCYCLE connects waste-generating factories with businesses
             that can reuse those materials — creating a smarter circular
             economy.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Button size="lg" asChild>
               <Link to="/register">
                 Register Factory <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link to="/matches">View AI Matches</Link>
             </Button>
           </div>
         </div>
@@ -129,8 +121,7 @@ const Landing = () => {
         <img
           src={logoTransparent}
           alt="punarCYCLE"
-          style={{ height: '250px', width: 'auto', display: 'block', margin: '0 auto 24px' }}
-          className="object-contain"
+          style={{ height: "220px", width: "auto", margin: "0 auto 24px" }}
         />
 
         <h2 className="text-3xl font-bold mb-4">
