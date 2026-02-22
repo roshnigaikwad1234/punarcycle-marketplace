@@ -1,200 +1,107 @@
-♻️ punarCYCLE – Industrial Circular Economy Platform
+# ♻️ punarCYCLE – Industrial Circular Economy Platform
 
-Reuse • Trade • Sustain
+**Reuse • Trade • Sustain**
 
-🌍 punarCYCLE is a B2B industrial sustainability platform that connects industrial waste generators with waste consumers using AI-powered matching, helping industries reduce waste, cost, and carbon emissions.
+🌍 **punarCYCLE** is a B2B industrial sustainability platform that connects **industrial waste generators** with **waste consumers** using AI-powered matching, enabling a circular economy and reducing environmental impact.
 
-🔗 Live Demo:
+🔗 **Live Demo:**  
 👉 https://punarcycle-marketplace.vercel.app/
 
-🚀 Problem Statement
+---
+
+## 🚀 Problem Statement
 
 Industrial waste management today is:
+- Manual and broker-dependent  
+- Costly to dispose  
+- Environmentally damaging  
+- Lacking sustainability visibility  
 
-Manual and broker-dependent
+Factories often don’t know **who can reuse their waste**, while others spend more on raw materials.
 
-Expensive to dispose
+---
 
-Environmentally damaging
+## 💡 Our Solution
 
-Lacking visibility of real sustainability impact
+punarCYCLE creates a **digital circular economy marketplace** where:
+- Factories list industrial waste
+- Other factories discover reusable materials
+- AI suggests suitable matches
+- Deals are initiated digitally
+- Environmental impact is tracked
 
-Factories often don’t know who can reuse their waste, while other factories spend extra money buying raw materials.
+**Waste → Resource → Value**
 
-💡 Solution – punarCYCLE
+---
 
-punarCYCLE creates a digital circular economy marketplace where:
+## 🧠 Key Features
 
-Factories list industrial waste
+### 🏭 Factory Registration
+- Register as **Producer**, **Consumer**, or **Both**
+- Simple onboarding flow
 
-Other factories discover reusable materials
+### 📦 Waste & Requirement Listings
+- Producers list waste materials
+- Consumers list raw material requirements
 
-AI suggests best matches
+### 🤖 AI Matches (Demo)
+- Matching based on:
+  - Material type
+  - Quantity
+  - Location
+- Compatibility score displayed
 
-Deals are initiated digitally
+### 🤝 Deal Initiation
+- One-click **Initiate Deal**
+- Deal saved with **Pending** status
+- Instantly visible in Deals dashboard
 
-Environmental impact is tracked
+### 📊 Deal Management
+- View active and completed deals
+- Deal lifecycle:
+  - Pending
+  - Processing
+  - Shipping
+  - Completed
 
-This turns waste → resource.
+### 🌱 Environmental Impact (Demo)
+- CO₂ emissions saved
+- Waste diverted from landfills
 
-🧠 Key Features
-🏭 Factory Registration
+---
 
-Register as Producer, Consumer, or Both
+## 🛠️ Tech Stack
 
-Simple onboarding (no heavy compliance initially)
+### Frontend
+- React (Vite)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Lucide Icons
 
-📦 Waste & Requirement Listings
+### Backend & Database
+- Firebase Authentication
+- Firebase Firestore
 
-Producers list waste materials
+### AI (Planned / Demo)
+- Google Gemini API (AI-powered matching)
 
-Consumers list raw material needs
+### Deployment
+- Vercel
 
-🤖 AI Matches (Demo)
+---
 
-Smart matching based on:
+## 🧱 System Architecture (High-Level)
 
-Material type
-
-Quantity
-
-Location
-
-Shows compatibility score
-
-🤝 Deal Initiation
-
-One-click Initiate Deal
-
-Deal saved with Pending status
-
-Visible instantly in Deals dashboard
-
-📊 Deal Management
-
-View all active & completed deals
-
-Status lifecycle:
-
-Pending
-
-Processing
-
-Shipping
-
-Completed
-
-🌱 Environmental Impact (Demo)
-
-CO₂ saved
-
-Waste diverted from landfills
-
-🛠️ Tech Stack
-Frontend
-
-React (Vite)
-
-TypeScript
-
-Tailwind CSS
-
-shadcn/ui
-
-Lucide Icons
-
-Backend & Database
-
-Firebase Authentication
-
-Firebase Firestore
-
-Firebase Hosting (optional)
-
-AI (Planned / Demo)
-
-Google Gemini API (for AI-powered matching)
-
-Deployment
-
-Vercel
-
-🧱 System Architecture (High Level)
+```text
 User (Browser)
    ↓
 React + Vite Frontend
    ↓
-Firebase Auth (Login/Register)
+Firebase Authentication
    ↓
 Firestore Database
    ↓
 AI Matching Logic (Demo / Gemini)
    ↓
 Deals & Impact Dashboard
-🔄 Application Flow
-
-User registers factory
-
-Factory lists waste or requirements
-
-AI Matches show suitable partners
-
-User initiates a deal
-
-Deal appears in Deals page as Pending
-
-Status updates through lifecycle
-
-📊 Sample Impact Metrics (Demo)
-
-Waste reused: 12 tons
-
-CO₂ saved: 28 tons
-
-Landfill diverted: 12 tons
-
-🧪 Demo Data
-
-For hackathon demo purposes:
-
-30 Producers
-
-30 Consumers
-
-Multiple industrial material types
-
-Realistic cities and pricing
-
-🏆 Hackathon Value
-
-Solves a real-world sustainability problem
-
-Promotes circular economy
-
-Scalable B2B SaaS idea
-
-Strong ESG & climate impact
-
-Investor & judge-ready UI
-
-🧩 Future Enhancements
-
-Real AI model for matching
-
-Logistics & transport optimization
-
-Compliance document automation
-
-Buyer/seller approvals
-
-ESG reporting dashboard
-
-Role-based access control
-
-👩‍💻 Team
-
-Built with ❤️ for sustainability and innovation.
-
-📄 License
-
-This project is developed for hackathon & educational purposes.
